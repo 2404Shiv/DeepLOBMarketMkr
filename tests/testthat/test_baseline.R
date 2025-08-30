@@ -1,5 +1,11 @@
 # tests/testthat/test_baseline.R
 
+root <- normalizePath(testthat::test_path("..", ".."))  # project root from tests/testthat
+
+source(file.path(root, "R", "backtest_baseline.R"), local = TRUE)
+source(file.path(root, "R", "03_glm_backtest.R"),   local = TRUE)  # adjust names to match your repo
+# source(file.path(root, "R", "02_tune_rl.R"),      local = TRUE)  # if needed, same pattern
+
 # 0. Make sure our function is loaded
 source("../../R/backtest_baseline.R")
 
