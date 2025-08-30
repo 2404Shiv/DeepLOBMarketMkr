@@ -31,11 +31,14 @@ find_file <- function(filename) {
   if (length(hits)) hits[[1]] else NA_character_
 }
 ```
-
+```{r figdir, include=FALSE}
+fig_dir <- "figures"
+if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
+if (!dir.exists("output/results")) dir.create("output/results", recursive = TRUE)
+```
 ```{r}
 print("✅ R chunks are executing. If you see this, knitr is running.")
 ```
-
 ```{r}
 params_path <- if (file.exists("params.yml")) "params.yml" else find_file("params.yml")
 params_list <- if (!is.na(params_path)) yaml::read_yaml(params_path) else NULL
@@ -52,7 +55,6 @@ df_snapshot <- tibble::tibble(
 )
 kable(df_snapshot, caption = "Project snapshot")
 ```
-
 ```{r}
 path_features  <- if (file.exists("features.csv")) "features.csv" else find_file("features.csv")
 path_lob_clean <- if (file.exists("lob_clean.csv")) "lob_clean.csv" else find_file("lob_clean.csv")
@@ -72,10 +74,9 @@ kable(tbl_paths, caption = "Data files discovered")
 
 if (!is.null(features)) kable(head(features, 5), caption = "First 5 rows of features.csv")
 ```
-
 ```{r, fig.height=3.8}
 if (!is.null(features) && "ts" %in% names(features)) {
-  features |>
+  p_feat <- features |>
     mutate(ts = as.POSIXct(ts, tz = "UTC")) |>
     arrange(ts) |>
     select(any_of(c("ts","mid","spread","ret1s"))) |>
@@ -84,11 +85,12 @@ if (!is.null(features) && "ts" %in% names(features)) {
     geom_line() + 
     facet_wrap(~ metric, scales = "free_y", ncol = 1) +
     labs(title = "Core Streams from features.csv", x = NULL, y = NULL)
+  print(p_feat)
+  ggsave(file.path(fig_dir, "features_core.png"), p_feat, width = 9, height = 5, dpi = 150)
 } else {
   print("ℹ️ Skipping features plot: features.csv missing or lacks 'ts'.")
 }
 ```
-
 ```{r}
 p_baseline <- if (file.exists("baseline_trades.csv")) "baseline_trades.csv" else find_file("baseline_trades.csv")
 p_glm      <- if (file.exists("glm_trades.csv")) "glm_trades.csv" else find_file("glm_trades.csv")
@@ -106,8 +108,7 @@ norm_trades <- function(df, name){
   dt <- as_tibble(df)
   if ("ts" %in% names(dt)) dt$ts <- as.POSIXct(dt$ts, tz = "UTC")
 
-  preferred <- c("PnL_net","PnL","pnl","PnL_RL",
-                 "PnL_glm","PnL_rf","PnL_baseline","PnL_rl",
+  preferred <- c("PnL_net","PnL","pnl","PnL_RL","PnL_glm","PnL_rf","PnL_baseline","PnL_rl",
                  "ret","ret_glm","ret_rf","ret_baseline","ret_rl")
   pnl_col <- intersect(preferred, names(dt))
   if (length(pnl_col) > 1) pnl_col <- pnl_col[1]
@@ -145,80 +146,6 @@ tbl_trade_paths <- tibble::tibble(
 kable(tbl_trade_paths, caption = "Trade files discovered & loaded")
 if (nrow(trades) == 0) print("⚠️ No trade files loaded or no PnL/ret column detected.")
 ```
-
-```{r, fig.height=4}
-if (nrow(trades) > 0) {
-  perf <- trades |>
-    arrange(ts) |>
-    group_by(strat) |>
-    mutate(
-      pnl_cum = cumsum(replace_na(pnl, 0)),
-      ret     = pnl,
-      ret_cum = cumsum(replace_na(ret, 0))
-    ) |>
-    ungroup()
-  ggplot(perf, aes(ts, pnl_cum, group = strat, color = strat)) +
-    geom_line() +
-    labs(title = "Cumulative PnL by Strategy", x = NULL, y = "Cumulative PnL")
-} else {
-  print("ℹ️ Skipping PnL plot: no trades.")
-}
-```
-
-```{r}
-if (exists("perf") && nrow(perf) > 0) {
-  perf_tbl <- perf |>
-    group_by(strat) |>
-    summarise(
-      n_trades = dplyr::n(),
-      pnl_total = sum(pnl, na.rm = TRUE),
-      pnl_mean  = mean(pnl, na.rm = TRUE),
-      pnl_sd    = sd(pnl, na.rm = TRUE),
-      sharpe    = ifelse(pnl_sd > 0, pnl_mean / pnl_sd * sqrt(252), NA_real_),
-      hit_rate  = mean(pnl > 0, na.rm = TRUE)
-    ) |>
-    arrange(desc(pnl_total))
-  kable(perf_tbl, caption = "Performance summary")
-} else {
-  print("ℹ️ Performance table skipped: no perf data yet.")
-}
-```
-
-```{r, fig.height=4}
-if (exists("perf") && nrow(perf) > 0) {
-  dd <- perf |>
-    group_by(strat) |>
-    arrange(ts) |>
-    mutate(peak = cummax(pnl_cum), drawdown = pnl_cum - peak)
-  ggplot(dd, aes(ts, drawdown, group = strat, color = strat)) +
-    geom_line() +
-    labs(title = "Drawdown by Strategy", x = NULL, y = "Drawdown")
-} else {
-  print("ℹ️ Drawdown plot skipped: no perf data yet.")
-}
-```
-
-```{r}
-rl_cfg <- (strategy_cfg$rl) %||% list(gamma = 0.99, learning_rate = 5e-4, epsilon_start = 0.9, epsilon_end = 0.01, epsilon_decay = 50000)
-kable(tibble::enframe(rl_cfg, name="param", value="value"), caption = "RL config")
-```
-
-```{r}
-appendix <- tibble::tibble(
-  file = c("baseline_trades.csv","glm_trades.csv","rf_trades.csv","rl_trades.csv"),
-  loaded = c(!is.null(trades_list$Baseline), !is.null(trades_list$GLM), !is.null(trades_list$RF), !is.null(trades_list$RL)),
-  columns = c(paste(if (!is.null(baseline)) names(baseline) else "—", collapse=", "),
-              paste(if (!is.null(glm))      names(glm)      else "—", collapse=", "),
-              paste(if (!is.null(rf))       names(rf)       else "—", collapse=", "),
-              paste(if (!is.null(rl))       names(rl)       else "—", collapse=", "))
-)
-kable(appendix, caption = "Columns detected in each trade file")
-```
-```{r figdir, include=FALSE}
-fig_dir <- "figures"
-if (!dir.exists(fig_dir)) dir.create(fig_dir, recursive = TRUE)
-### 2) Replace your **Cumulative PnL** chunk with this (adds `ggsave`)
-```r
 ```{r, fig.height=4}
 if (nrow(trades) > 0) {
   perf <- trades |>
@@ -234,14 +161,30 @@ if (nrow(trades) > 0) {
     geom_line() +
     labs(title = "Cumulative PnL by Strategy", x = NULL, y = "Cumulative PnL")
   print(p_pnl)
-
-  # save PNG for README
   ggsave(file.path(fig_dir, "pnl_by_strategy.png"), p_pnl, width = 9, height = 4.5, dpi = 150)
 } else {
   print("ℹ️ Skipping PnL plot: no trades.")
 }
-### 3) Replace your **Drawdowns** chunk with this
-```r
+```
+```{r}
+if (exists("perf") && nrow(perf) > 0) {
+  perf_tbl <- perf |>
+    group_by(strat) |>
+    summarise(
+      n_trades = dplyr::n(),
+      pnl_total = sum(pnl, na.rm = TRUE),
+      pnl_mean  = mean(pnl, na.rm = TRUE),
+      pnl_sd    = sd(pnl, na.rm = TRUE),
+      sharpe    = ifelse(pnl_sd > 0, pnl_mean / pnl_sd * sqrt(252), NA_real_),
+      hit_rate  = mean(pnl > 0, na.rm = TRUE)
+    ) |>
+    arrange(desc(pnl_total))
+  kable(perf_tbl, caption = "Performance summary")
+  readr::write_csv(perf_tbl, "output/results/perf_summary.csv")
+} else {
+  print("ℹ️ Performance table skipped: no perf data yet.")
+}
+```
 ```{r, fig.height=4}
 if (exists("perf") && nrow(perf) > 0) {
   dd <- perf |>
@@ -252,35 +195,23 @@ if (exists("perf") && nrow(perf) > 0) {
     geom_line() +
     labs(title = "Drawdown by Strategy", x = NULL, y = "Drawdown")
   print(p_dd)
-
-  # save PNG for README
   ggsave(file.path(fig_dir, "drawdown_by_strategy.png"), p_dd, width = 9, height = 4.5, dpi = 150)
 } else {
   print("ℹ️ Drawdown plot skipped: no perf data yet.")
 }
-### 4) (Optional) Save the **features overview** plot too
-Find your features plot chunk and wrap it like this:
-```r
-```{r, fig.height=3.8}
-if (!is.null(features) && "ts" %in% names(features)) {
-  p_feat <- features |>
-    mutate(ts = as.POSIXct(ts, tz = "UTC")) |>
-    arrange(ts) |>
-    select(any_of(c("ts","mid","spread","ret1s"))) |>
-    pivot_longer(-ts, names_to = "metric", values_to = "value") |>
-    ggplot(aes(ts, value)) + 
-    geom_line() + 
-    facet_wrap(~ metric, scales = "free_y", ncol = 1) +
-    labs(title = "Core Streams from features.csv", x = NULL, y = NULL)
-  print(p_feat)
-
-  ggsave(file.path(fig_dir, "features_core.png"), p_feat, width = 9, height = 5, dpi = 150)
-} else {
-  print("ℹ️ Skipping features plot: features.csv missing or lacks 'ts'.")
-}
-### 5) (Optional) Save the **performance table** to CSV
-In your Performance Table chunk (where you build `perf_tbl`), append:
-```r
-  # also export summary for reference
-  readr::write_csv(perf_tbl, "output/results/perf_summary.csv")
-
+```
+```{r}
+rl_cfg <- (strategy_cfg$rl) %||% list(gamma = 0.99, learning_rate = 5e-4, epsilon_start = 0.9, epsilon_end = 0.01, epsilon_decay = 50000)
+kable(tibble::enframe(rl_cfg, name="param", value="value"), caption = "RL config")
+```
+```{r}
+appendix <- tibble::tibble(
+  file = c("baseline_trades.csv","glm_trades.csv","rf_trades.csv","rl_trades.csv"),
+  loaded = c(!is.null(trades_list$Baseline), !is.null(trades_list$GLM), !is.null(trades_list$RF), !is.null(trades_list$RL)),
+  columns = c(paste(if (!is.null(baseline)) names(baseline) else "—", collapse=", "),
+              paste(if (!is.null(glm))      names(glm)      else "—", collapse=", "),
+              paste(if (!is.null(rf))       names(rf)       else "—", collapse=", "),
+              paste(if (!is.null(rl))       names(rl)       else "—", collapse=", "))
+)
+kable(appendix, caption = "Columns detected in each trade file")
+```
