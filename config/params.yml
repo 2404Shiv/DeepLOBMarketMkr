@@ -1,0 +1,17 @@
+# config/params.yml
+data:
+  raw_path: "data/raw/"
+  processed_path: "data/processed/"
+
+strategy:
+  baseline:
+    risk_aversion: 0.1
+  rl:
+    gamma: 0.99
+    learning_rate: 0.0005
+    epsilon_start: 0.9
+    epsilon_end: 0.01
+    epsilon_decay: 50000
+  
+  
+
