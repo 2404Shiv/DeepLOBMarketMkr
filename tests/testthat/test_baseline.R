@@ -1,9 +1,14 @@
 test_that("baseline scripts parse and baseline_trades.csv is sane if present", {
-  # Source scripts (parse only; don’t run heavy backtests in CI)
-  expect_error(source(proj_path("R", "backtest_baseline.R"),  local = TRUE), NA)
-  expect_error(source(proj_path("R", "03_baseline_backtest.R"), local = TRUE), NA)
+  # Move into the project root so internal source('R/...') inside scripts works
+  old <- setwd(.root)
+  on.exit(setwd(old), add = TRUE)
 
-  # If a baseline trades file exists (committed or produced by workflow), validate it
+  # Parse checks (do not run heavy backtests in CI)
+  expect_error(source("R/backtest_baseline.R",       local = TRUE), NA)
+  expect_error(source("R/03_baseline_backtest.R",    local = TRUE), NA)
+  # If backtest_baseline.R internally source()s other R files, they now resolve correctly
+
+  # Validate trades file if present (skip if not produced in this run)
   p <- find_one("baseline_trades.csv")
   if (is.na(p)) testthat::skip("baseline_trades.csv not found in repo/CI run")
 
