@@ -3,7 +3,7 @@ test_that("baseline scripts parse and baseline_trades.csv is sane if present", {
   old <- setwd(.root)
   on.exit(setwd(old), add = TRUE)
 
-  # Parse checks (do not run heavy backtests in CI)
+  # Parse checks (do NOT run the backtest loops in CI)
   expect_error(source("R/backtest_baseline.R",    local = TRUE), NA)
   expect_error(source("R/03_baseline_backtest.R", local = TRUE), NA)
 
