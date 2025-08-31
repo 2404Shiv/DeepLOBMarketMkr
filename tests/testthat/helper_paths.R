@@ -1,30 +1,29 @@
-# helper_paths.R — loaded before tests
+## tests/testthat/helper_paths.R
+## Robust helpers used by all tests
 
-# Project root from tests/testthat/
-.root <- normalizePath(testthat::test_path("..", ".."), winslash = "/")
+# Project root (CI runs tests from tests/testthat, so ".." is the repo root)
+.root <- normalizePath("..", winslash = "/", mustWork = TRUE)
 
-# Build a path under project root
-proj_path <- function(...) file.path(.root, ...)
-
-# Find a file anywhere under repo (first match)
-find_one <- function(fname) {
-  hits <- list.files(.root, pattern = paste0("^", gsub("\\.", "\\\\.", fname), "$"),
-                     recursive = TRUE, full.names = TRUE)
-  if (length(hits)) hits[[1]] else NA_character_
-}
-
-# Read CSV if exists
+# Read a CSV if it exists, else return NULL
 read_if <- function(path) {
-  if (!is.na(path) && file.exists(path)) {
+  if (!is.null(path) && !is.na(path) && file.exists(path)) {
     suppressMessages(readr::read_csv(path, show_col_types = FALSE))
-  } else NULL
+  } else {
+    NULL
+  }
 }
 
-# Does a data.frame have any plausible PnL/ret column?
-has_pnl <- function(x) {
-  any(c("PnL_net","PnL","pnl","PnL_RL","PnL_glm","PnL_rf","PnL_baseline",
-        "ret","ret_glm","ret_rf","ret_baseline","ret_rl") %in% names(x))
+# Find a single file anywhere under the repo (first match) or NA if not found
+find_one <- function(filename) {
+  hits <- list.files(.root, pattern = paste0("^", gsub("\\.", "\\\\.", filename), "$"),
+                     recursive = TRUE, full.names = TRUE)
+  if (length(hits)) normalizePath(hits[[1]], winslash = "/", mustWork = FALSE) else NA_character_
 }
 
-# Does it have a time index?
-has_ts <- function(x) any(c("ts","time","datetime","timestamp") %in% names(x))
+# Minimal structure checks used in tests
+has_pnl <- function(df) {
+  any(tolower(names(df)) %in% c("pnl", "pnl_net", "pnl_rl", "pnl_glm", "pnl_rf", "ret", "ret1s"))
+}
+has_ts <- function(df) {
+  "ts" %in% names(df)
+}
