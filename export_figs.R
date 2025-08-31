@@ -1,15 +1,15 @@
-# export_figs.R  — write README figures from trade CSVs
 suppressPackageStartupMessages({
   library(readr); library(dplyr); library(tidyr); library(ggplot2); library(tibble)
 })
 
-# Locate trade files (root or output/results)
+# Find a file anywhere in the project
 find_one <- function(fname) {
   hits <- list.files(".", pattern = paste0("^", gsub("\\.", "\\\\.", fname), "$"),
                      recursive = TRUE, full.names = TRUE)
   if (length(hits)) hits[[1]] else NA_character_
 }
 
+# Try both project root and nested folders
 p_baseline <- find_one("baseline_trades.csv")
 p_glm      <- find_one("glm_trades.csv")
 p_rf       <- find_one("rf_trades.csv")
@@ -34,8 +34,9 @@ norm_trades <- function(df, name){
     hits <- grep("^(PnL|pnl|ret)", names(dt), value = TRUE)
     if (length(hits)) pnl_col <- hits[1] else return(NULL)
   }
-  dt |> transmute(ts = if ("ts" %in% names(dt)) ts else row_number(),
-                  pnl = .data[[pnl_col]], strat = name)
+  dt |>
+    transmute(ts = if ("ts" %in% names(dt)) ts else row_number(),
+              pnl = .data[[pnl_col]], strat = name)
 }
 
 trades <- bind_rows(
@@ -45,7 +46,11 @@ trades <- bind_rows(
   norm_trades(rl,       "RL")
 )
 
-stopifnot(nrow(trades) > 0)
+if (nrow(trades) == 0) {
+  cat("No trades found. Checked paths:\n",
+      p_baseline, "\n", p_glm, "\n", p_rf, "\n", p_rl, "\n", sep = "")
+  quit(status = 1)
+}
 
 perf <- trades |>
   arrange(ts) |>
@@ -54,26 +59,24 @@ perf <- trades |>
   ungroup()
 
 # Ensure output dirs
-fig_dir <- "figures"
-dir.create(fig_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create("figures", recursive = TRUE, showWarnings = FALSE)
 dir.create("output/results", recursive = TRUE, showWarnings = FALSE)
 
 # PnL plot
 p_pnl <- ggplot(perf, aes(ts, pnl_cum, color = strat)) +
   geom_line() + labs(title = "Cumulative PnL by Strategy", x = NULL, y = "Cumulative PnL")
-ggsave(file.path(fig_dir, "pnl_by_strategy.png"), p_pnl, width = 9, height = 4.5, dpi = 150)
+ggsave("figures/pnl_by_strategy.png", p_pnl, width = 9, height = 4.5, dpi = 150)
 
 # Drawdown plot
 dd <- perf |>
   group_by(strat) |>
   arrange(ts) |>
   mutate(peak = cummax(pnl_cum), drawdown = pnl_cum - peak)
-
 p_dd <- ggplot(dd, aes(ts, drawdown, color = strat)) +
   geom_line() + labs(title = "Drawdown by Strategy", x = NULL, y = "Drawdown")
-ggsave(file.path(fig_dir, "drawdown_by_strategy.png"), p_dd, width = 9, height = 4.5, dpi = 150)
+ggsave("figures/drawdown_by_strategy.png", p_dd, width = 9, height = 4.5, dpi = 150)
 
-# Performance summary CSV (for table in README if wanted)
+# Performance summary CSV
 perf_tbl <- perf |>
   group_by(strat) |>
   summarise(
@@ -85,7 +88,6 @@ perf_tbl <- perf |>
     hit_rate  = mean(pnl > 0, na.rm = TRUE)
   ) |>
   arrange(desc(pnl_total))
-
-readr::write_csv(perf_tbl, "output/results/perf_summary.csv")
+write_csv(perf_tbl, "output/results/perf_summary.csv")
 
 cat("Wrote:\n - figures/pnl_by_strategy.png\n - figures/drawdown_by_strategy.png\n - output/results/perf_summary.csv\n")
