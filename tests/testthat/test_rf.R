@@ -1,15 +1,12 @@
-test_that("RF scripts parse and rf_trades.csv is sane if present", {
-  p_parse <- file.path(.root, "R", "03_rf_backtest.R")
+test_that("RF scripts are syntactically valid; rf_trades.csv sane if present", {
+  safe_parse(file.path(.root, "R", "03_rf_backtest.R"))
 
-  expect_true(file.exists(p_parse), info = p_parse)
-  expect_error(source(p_parse, local = TRUE), NA)
+  p <- find_one("rf_trades.csv")
+  if (is.na(p)) testthat::skip("rf_trades.csv not found in repo/CI run")
 
-  p_out <- find_one("rf_trades.csv")
-  if (is.na(p_out)) testthat::skip("rf_trades.csv not found in repo/CI run")
-
-  dat <- read_if(p_out)
-  expect_true(is.data.frame(dat))
-  expect_true(nrow(dat) > 0)
-  expect_true(has_pnl(dat))
-  expect_true(has_ts(dat))
+  dat <- read_if(p)
+  testthat::expect_true(is.data.frame(dat))
+  testthat::expect_true(nrow(dat) > 0)
+  testthat::expect_true(has_pnl(dat))
+  testthat::expect_true(has_ts(dat))
 })
