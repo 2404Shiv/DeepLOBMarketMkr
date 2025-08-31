@@ -16,9 +16,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          Rscript -e 'pkgs <- c("data.table","yaml","TTR","xts","PerformanceAnalytics","testthat","quantmod");
-                      need <- pkgs[!sapply(pkgs, requireNamespace, quietly = TRUE)];
-                      if (length(need)) install.packages(need, repos = "https://cran.rstudio.com")'
+          Rscript -e 'packages <- c("data.table","yaml","TTR","xts","PerformanceAnalytics","testthat","quantmod"); 
+                      need <- packages[!sapply(packages, requireNamespace, quietly = TRUE)];
+                      if(length(need)) install.packages(need, repos="https://cran.rstudio.com")'
 
       - name: Run tests
         run: Rscript -e 'library(testthat); test_dir("tests/testthat")'
